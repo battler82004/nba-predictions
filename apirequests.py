@@ -132,7 +132,6 @@ class NBADataFetcher:
 
                 # Isolate the team data from the whole box score
                 team_stats = box_score.team_stats.get_data_frame()
-                print(team_stats)
                 return team_stats
 
             # We will fill this in later to handle different kinds of exceptions that may arise when calling the APIs
@@ -142,13 +141,112 @@ class NBADataFetcher:
                     time.sleep(wait_seconds)
                 else:
                     print("Fetching this game failed. Skipping")
+                    raise
+
+    def find_existing_data(self):
+        data_types = ["advanced", "hustle", "misc", "track", "traditional"]
+
+        for data_type in data_types:
+            try:
+                # Read data for the data type and store it in an member variable
+                existing_data = pd.read_csv(f"{self.season}_{data_type}_stats.csv")
+                setattr(self, f"existing_{data_type}_stats", existing_data)
+            except:
+                setattr(self, f"existing_{data_type}_stats", pd.DataFrame())
+
+    def data_exists(self, game_id, data_type):
+        existing_data = getattr(self, f"existing_{data_type}_stats")
+        return (not existing_data.empty) and (int(game_id) in existing_data["gameId"].unique())
+    
+    def concatenate_and_save(self, data_type, new_data_list):
+        existing_data = getattr(self, f"existing_{data_type}_stats")
+
+        if (not existing_data.empty) and (len(new_data_list) != 0): # existing and new data
+            combined_data = pd.concat([existing_data, pd.concat(new_data_list, ignore_index=True)], ignore_index=True)
+        elif len(new_data_list) == 0: # no new data, but have existing data
+            combined_data = existing_data
+        else: # no existing data, have new data
+            combined_data = pd.concat(new_data_list, ignore_index=True)
+
+        combined_data.to_csv(f"{self.season}_{data_type}_stats.csv")
+    
+    def fetch_and_save_all_data(self):
+        game_counter = 0
+        game_logs = self.fetch_league_game_logs()
+        game_logs = self.process_game_logs(game_logs)
+        game_logs.to_csv(f"{self.season}_all_games.csv", index=False)
+
+        game_ids = game_logs["gameId"].unique()
+        self.find_existing_data()
+        (advanced_stats_list, hustle_stats_list, misc_stats_list, track_stats_list, traditional_stats_list) = ([], [], [], [], [])
+
+        for game_id in game_ids:
+            game_counter += 1
+            if game_counter % 10 == 0:
+                print(f"{game_counter} / {len(game_ids)}")
+
+            try:
+                advanced_stats_exist = self.data_exists(game_id, "advanced")
+                if not advanced_stats_exist: # Only add box score if it's not already in the list
+                    advanced_box_score = self.fetch_box_score(game_id, "advanced")
+                    advanced_stats_list.append(advanced_box_score)
+
+                hustle_stats_exist = self.data_exists(game_id, "hustle")
+                if not hustle_stats_exist: # Only add box score if it's not already in the list
+                    hustle_box_score = self.fetch_box_score(game_id, "hustle")
+                    hustle_stats_list.append(hustle_box_score)
+
+                misc_stats_exist = self.data_exists(game_id, "misc")
+                if not misc_stats_exist: # Only add box score if it's not already in the list
+                    misc_box_score = self.fetch_box_score(game_id, "misc")
+                    misc_stats_list.append(misc_box_score)
+
+                track_stats_exist = self.data_exists(game_id, "track")
+                if not track_stats_exist: # Only add box score if it's not already in the list
+                    track_box_score = self.fetch_box_score(game_id, "track")
+                    track_stats_list.append(track_box_score)
+
+                traditional_stats_exist = self.data_exists(game_id, "traditional")
+                if not traditional_stats_exist: # Only add box score if it's not already in the list
+                    traditional_box_score = self.fetch_box_score(game_id, "traditional")
+                    traditional_stats_list.append(traditional_box_score)
+                
+            except KeyboardInterrupt: # Ctrl+C in terminal while saving
+                print("Caught KeyboardInterrupt, saving files")
+                # Saves everything before the program terminates, then rethrows the error
+                self.concatenate_and_save("advanced", advanced_stats_list)
+                self.concatenate_and_save("hustle", hustle_stats_list)
+                self.concatenate_and_save("misc", misc_stats_list)
+                self.concatenate_and_save("track", track_stats_list)
+                self.concatenate_and_save("traditional", traditional_stats_list)
+                raise
+
+            except JSONDecodeError as e:
+                print("Failed to fetch data, skipping game")
+
+            except Exception as e:
+                print(f"Caught unexpected exception: {e}, saving files")
+                # Saves everything before the program terminates, then rethrows the error
+                self.concatenate_and_save("advanced", advanced_stats_list)
+                self.concatenate_and_save("hustle", hustle_stats_list)
+                self.concatenate_and_save("misc", misc_stats_list)
+                self.concatenate_and_save("track", track_stats_list)
+                self.concatenate_and_save("traditional", traditional_stats_list)
+                raise
+
+        # Save data
+        print(f"Data fetched successfully, saving data for {self.season}")
+        self.concatenate_and_save("advanced", advanced_stats_list)
+        self.concatenate_and_save("hustle", hustle_stats_list)
+        self.concatenate_and_save("misc", misc_stats_list)
+        self.concatenate_and_save("track", track_stats_list)
+        self.concatenate_and_save("traditional", traditional_stats_list)
 
 if __name__ == "__main__":
     # Specify the seasons we want to collect data for
-    seasons = ["2023-24", "2022-23", "2021-22"]
+    seasons = ["2023-24"]
 
     # Create new NBADataFetcher for each season
     for season in seasons:
         fetcher = NBADataFetcher(season)
-        print(fetcher.fetch_box_score("0022300062", "traditional"))
-        fetcher.processed_game_logs.to_csv("processed_game_logs.csv")
+        fetcher.fetch_and_save_all_data()
