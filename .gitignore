@@ -163,3 +163,9 @@ cython_debug/
 
 # Generated Data
 processed_game_logs.csv
+2024-25_advanced_stats.csv
+2024-25_all_games.csv
+2024-25_hustle_stats.csv
+2024-25_misc_stats.csv
+2024-25_track_stats.csv
+2024-25_traditional_stats.csv
