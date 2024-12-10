@@ -185,6 +185,7 @@ class Preproccessor:
             seasons.append(processed_df)
         
         self.team_stats = pd.concat(seasons)
+        self.team_stats = self.team_stats.drop(columns=["HOME_TEAM_ABBREVIATION", "AWAY_TEAM_ABBREVIATION", "winner"])
 
     def preprocess_team_data(self, df):
         grouped = df.groupby("teamTricode")
@@ -203,13 +204,38 @@ class Preproccessor:
     
     def generate_team_running_averages(self, group):
         percentage_columns = [
-            # FILL IN
+            "assistPercentage",
+            "assistToTurnover",
+            "assistRatio",
+            "offensiveReboundPercentage",
+            "defensiveReboundPercentage",
+            "reboundPercentage",
+            "turnoverRatio",
+            "effectiveFieldGoalPercentage",
+            "trueShootingPercentage",
+            "usagePercentage",
+            "estimatedUsagePercentage",
+            "fieldGoalsPercentage",
+            "threePointersPercentage",
+            "freeThrowsPercentage",
+            "contestedFieldGoalPercentage",
+            "uncontestedFieldGoalsPercentage",
+            "defendedAtRimFieldGoalPercentage"
         ]
 
         # Average every column that is not non-averagable or a percentage
         averaging_columns = [
             col for col in group.columns if (col not in [
-                # FILL IN
+                "teamTricode",
+                "gameId",
+                "date",
+                "game_count",
+                "time_between_games",
+                "playoff",
+                "win",
+                "winner",
+                "HOME_TEAM_ABBREVIATION",
+                "AWAY_TEAM_ABBREVIATION"
             ]
             and col not in percentage_columns)
         ]
@@ -235,4 +261,4 @@ if __name__ == "__main__":
 
     print("Processing complete, saving data")
     p50.games.to_csv("all_games.csv")
-    p50.teams_stats.to_csv("all_team_averages.csv")
+    p50.team_stats.to_csv("all_team_averages.csv")
